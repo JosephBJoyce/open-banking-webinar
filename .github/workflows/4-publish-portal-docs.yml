@@ -1,0 +1,76 @@
+name: 4 · Publish Developer Portal Docs
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment that was just deployed'
+        required: true
+        default: production
+        type: choice
+        options:
+          - staging
+          - production
+      version:
+        description: 'Git SHA of the deployed version'
+        required: true
+        type: string
+      preview_only:
+        description: 'Preview changes without publishing live'
+        required: false
+        default: false
+        type: boolean
+
+# Publishes (or previews) the Swagger Portal product page for the Open Banking API
+# using the SmartBear MCP server's publish_portal_product tool.
+#
+# This workflow is triggered automatically by the deploy workflow on successful
+# production deployments, or can be run manually to preview doc changes before
+# they go live.
+#
+# MCP server docs: https://developer.smartbear.com/smartbear-mcp/docs/swagger-portal-integration
+
+jobs:
+  publish-portal:
+    name: ${{ inputs.preview_only == 'true' && 'Preview' || 'Publish' }} Portal docs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Publish (or preview) Swagger Portal product
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SMARTBEAR_API_KEY: ${{ secrets.SMARTBEAR_API_KEY }}
+          PORTAL_PRODUCT_ID: ${{ vars.SWAGGER_PORTAL_PRODUCT_ID }}
+          PREVIEW_ONLY: ${{ inputs.preview_only }}
+          DEPLOYED_VERSION: ${{ inputs.version }}
+          TARGET_ENV: ${{ inputs.environment }}
+        run: |
+          if [ "$PREVIEW_ONLY" = "true" ]; then
+            ACTION="Preview the portal product changes — do not publish live. Report what would change."
+          else
+            ACTION="Publish the portal product live so it is visible to external developers."
+          fi
+
+          claude --allowedTools swagger_publish_portal_product,swagger_get_portal_product,swagger_update_portal_product -p "
+            The Open Banking API ($DEPLOYED_VERSION) has just been deployed to $TARGET_ENV.
+
+            1. Retrieve the current portal product using product ID: $PORTAL_PRODUCT_ID
+            2. Update the portal product's API reference to point at the latest OpenAPI
+               definition from openapi/open-banking-api.yml in this repository.
+            3. Update the product changelog to note the new version $DEPLOYED_VERSION
+               was deployed to $TARGET_ENV on $(date -u '+%Y-%m-%d').
+            4. $ACTION
+
+            If any errors occur, print a clear summary and exit with code 1.
+          "
+
+      - name: Confirm portal URL
+        if: inputs.preview_only != 'true'
+        run: |
+          echo "Portal product published successfully."
+          echo "Developer portal: https://portal.bank.example.com/open-banking"

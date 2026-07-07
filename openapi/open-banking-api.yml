@@ -1,0 +1,594 @@
+openapi: 3.0.3
+info:
+  title: Open Banking API
+  description: |
+    PSD2-compliant Open Banking API providing Account Information Services (AIS)
+    and Payment Initiation Services (PIS) for regulated third-party providers.
+
+    This API is governed by the Berlin Group NextGenPSD2 framework and is designed
+    to be consumed by licensed TPPs (Third Party Providers) under PSD2 / PSD3.
+  version: 1.0.0
+  contact:
+    name: API Platform Team
+    email: api-platform@bank.example.com
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.bank.example.com/open-banking/v1
+    description: Production
+  - url: https://sandbox.bank.example.com/open-banking/v1
+    description: Sandbox
+
+security:
+  - OAuth2:
+      - accounts:read
+      - payments:write
+
+tags:
+  - name: Accounts
+    description: Account Information Services (AIS)
+  - name: Payments
+    description: Payment Initiation Services (PIS)
+  - name: Consents
+    description: TPP Consent Management
+
+paths:
+  /accounts:
+    get:
+      operationId: listAccounts
+      summary: List accounts
+      description: Returns all accounts the PSU has consented to share with the TPP.
+      tags: [Accounts]
+      security:
+        - OAuth2: [accounts:read]
+      parameters:
+        - $ref: '#/components/parameters/ConsentId'
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: List of accounts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /accounts/{accountId}:
+    get:
+      operationId: getAccount
+      summary: Get account details
+      description: Returns details for a single account.
+      tags: [Accounts]
+      security:
+        - OAuth2: [accounts:read]
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - $ref: '#/components/parameters/ConsentId'
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: Account details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /accounts/{accountId}/transactions:
+    get:
+      operationId: listTransactions
+      summary: List transactions
+      description: Returns booked and pending transactions for an account within a date range.
+      tags: [Accounts]
+      security:
+        - OAuth2: [accounts:read]
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - $ref: '#/components/parameters/ConsentId'
+        - $ref: '#/components/parameters/XRequestId'
+        - name: dateFrom
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          example: '2025-01-01'
+        - name: dateTo
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          example: '2025-01-31'
+        - name: bookingStatus
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [booked, pending, both]
+          example: booked
+      responses:
+        '200':
+          description: Transaction list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /payments/sepa-credit-transfers:
+    post:
+      operationId: initiatePayment
+      summary: Initiate a SEPA Credit Transfer
+      description: |
+        Initiates a SEPA Credit Transfer on behalf of the PSU.
+        Strong Customer Authentication (SCA) may be required.
+      tags: [Payments]
+      security:
+        - OAuth2: [payments:write]
+      parameters:
+        - $ref: '#/components/parameters/ConsentId'
+        - $ref: '#/components/parameters/XRequestId'
+        - name: PSU-IP-Address
+          in: header
+          required: true
+          description: IP address of the PSU device
+          schema:
+            type: string
+            format: ipv4
+          example: '192.168.1.1'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentInitiation'
+      responses:
+        '201':
+          description: Payment initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentInitiationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /payments/sepa-credit-transfers/{paymentId}:
+    get:
+      operationId: getPaymentStatus
+      summary: Get payment status
+      description: Returns the current status of a payment initiation request.
+      tags: [Payments]
+      security:
+        - OAuth2: [payments:write]
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: Payment status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /consents:
+    post:
+      operationId: createConsent
+      summary: Create consent
+      description: Creates a consent resource authorising a TPP to access account data.
+      tags: [Consents]
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: PSU-IP-Address
+          in: header
+          required: true
+          schema:
+            type: string
+            format: ipv4
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentRequest'
+      responses:
+        '201':
+          description: Consent created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /consents/{consentId}:
+    get:
+      operationId: getConsent
+      summary: Get consent status
+      tags: [Consents]
+      parameters:
+        - $ref: '#/components/parameters/ConsentId'
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: Consent details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: deleteConsent
+      summary: Delete consent
+      tags: [Consents]
+      parameters:
+        - $ref: '#/components/parameters/ConsentId'
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '204':
+          description: Consent deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    OAuth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.bank.example.com/oauth2/authorize
+          tokenUrl: https://auth.bank.example.com/oauth2/token
+          scopes:
+            accounts:read: Read account and transaction data
+            payments:write: Initiate payments on behalf of the PSU
+
+  parameters:
+    AccountId:
+      name: accountId
+      in: path
+      required: true
+      description: Unique identifier of the account (IBAN or internal ID)
+      schema:
+        type: string
+      example: DE89370400440532013000
+
+    PaymentId:
+      name: paymentId
+      in: path
+      required: true
+      description: Unique identifier of the payment resource
+      schema:
+        type: string
+        format: uuid
+      example: 3dc3d5b3-7023-4848-9853-f5400a64e80f
+
+    ConsentId:
+      name: Consent-ID
+      in: header
+      required: true
+      description: Identifier of the TPP consent granted by the PSU
+      schema:
+        type: string
+      example: consent-12345abcde
+
+    XRequestId:
+      name: X-Request-ID
+      in: header
+      required: true
+      description: Unique request identifier for idempotency and tracing (UUID)
+      schema:
+        type: string
+        format: uuid
+      example: 99391c7e-ad88-49ec-a2ad-99ddcb1f7721
+
+  schemas:
+    Account:
+      type: object
+      required: [resourceId, iban, currency, accountType, status]
+      properties:
+        resourceId:
+          type: string
+          description: Internal account identifier
+          example: 3dc3d5b3-7023-4848-9853-f5400a64e80f
+        iban:
+          type: string
+          pattern: '^[A-Z]{2}[0-9]{2}[A-Z0-9]{4}[0-9]{7}([A-Z0-9]?){0,16}$'
+          example: DE89370400440532013000
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          example: EUR
+        accountType:
+          type: string
+          enum: [CACC, SVGS, BBAN, MOMA, LOAN]
+          description: ISO 20022 account type code
+          example: CACC
+        status:
+          type: string
+          enum: [enabled, deleted, blocked]
+          example: enabled
+        ownerName:
+          type: string
+          example: Max Mustermann
+        product:
+          type: string
+          example: Current Account
+
+    AccountList:
+      type: object
+      required: [accounts]
+      properties:
+        accounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Account'
+
+    Transaction:
+      type: object
+      required: [transactionId, bookingDate, transactionAmount, creditorName]
+      properties:
+        transactionId:
+          type: string
+          format: uuid
+        bookingDate:
+          type: string
+          format: date
+          example: '2025-01-15'
+        valueDate:
+          type: string
+          format: date
+          example: '2025-01-15'
+        transactionAmount:
+          $ref: '#/components/schemas/Amount'
+        creditorName:
+          type: string
+          example: Amazon EU SARL
+        creditorAccount:
+          $ref: '#/components/schemas/AccountReference'
+        debtorName:
+          type: string
+          example: Max Mustermann
+        remittanceInformationUnstructured:
+          type: string
+          example: Order 123-456-789
+
+    TransactionList:
+      type: object
+      required: [account, transactions]
+      properties:
+        account:
+          $ref: '#/components/schemas/AccountReference'
+        transactions:
+          type: object
+          properties:
+            booked:
+              type: array
+              items:
+                $ref: '#/components/schemas/Transaction'
+            pending:
+              type: array
+              items:
+                $ref: '#/components/schemas/Transaction'
+
+    Amount:
+      type: object
+      required: [currency, amount]
+      properties:
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          example: EUR
+        amount:
+          type: string
+          pattern: '^-?\d{1,14}(\.\d{1,3})?$'
+          example: '142.99'
+
+    AccountReference:
+      type: object
+      properties:
+        iban:
+          type: string
+          example: DE89370400440532013000
+        currency:
+          type: string
+          example: EUR
+
+    PaymentInitiation:
+      type: object
+      required: [creditorName, creditorAccount, instructedAmount, debtorAccount]
+      properties:
+        creditorName:
+          type: string
+          maxLength: 70
+          example: Acme GmbH
+        creditorAccount:
+          $ref: '#/components/schemas/AccountReference'
+        instructedAmount:
+          $ref: '#/components/schemas/Amount'
+        debtorAccount:
+          $ref: '#/components/schemas/AccountReference'
+        remittanceInformationUnstructured:
+          type: string
+          maxLength: 140
+          example: Invoice 2025-001
+        requestedExecutionDate:
+          type: string
+          format: date
+          example: '2025-02-01'
+
+    PaymentInitiationResponse:
+      type: object
+      required: [paymentId, transactionStatus]
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+          example: 3dc3d5b3-7023-4848-9853-f5400a64e80f
+        transactionStatus:
+          $ref: '#/components/schemas/TransactionStatus'
+        _links:
+          type: object
+          properties:
+            scaRedirect:
+              type: object
+              properties:
+                href:
+                  type: string
+                  format: uri
+
+    PaymentStatus:
+      type: object
+      required: [paymentId, transactionStatus]
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        transactionStatus:
+          $ref: '#/components/schemas/TransactionStatus'
+
+    TransactionStatus:
+      type: string
+      enum: [RCVD, PDNG, ACTC, ACSC, RJCT, CANC]
+      description: |
+        ISO 20022 transaction status codes:
+        - RCVD: Received
+        - PDNG: Pending
+        - ACTC: AcceptedTechnicalValidation
+        - ACSC: AcceptedSettlementCompleted
+        - RJCT: Rejected
+        - CANC: Cancelled
+      example: RCVD
+
+    ConsentRequest:
+      type: object
+      required: [access, recurringIndicator, validUntil, frequencyPerDay]
+      properties:
+        access:
+          type: object
+          properties:
+            accounts:
+              type: array
+              items:
+                $ref: '#/components/schemas/AccountReference'
+            balances:
+              type: array
+              items:
+                $ref: '#/components/schemas/AccountReference'
+            transactions:
+              type: array
+              items:
+                $ref: '#/components/schemas/AccountReference'
+        recurringIndicator:
+          type: boolean
+          example: true
+        validUntil:
+          type: string
+          format: date
+          example: '2025-12-31'
+        frequencyPerDay:
+          type: integer
+          minimum: 1
+          maximum: 4
+          example: 4
+
+    ConsentResponse:
+      type: object
+      required: [consentId, consentStatus]
+      properties:
+        consentId:
+          type: string
+          example: consent-12345abcde
+        consentStatus:
+          type: string
+          enum: [received, rejected, valid, revokedByPsu, expired, terminatedByTpp]
+          example: received
+        validUntil:
+          type: string
+          format: date
+        _links:
+          type: object
+          properties:
+            scaRedirect:
+              type: object
+              properties:
+                href:
+                  type: string
+                  format: uri
+
+    Error:
+      type: object
+      required: [tppMessages]
+      properties:
+        tppMessages:
+          type: array
+          items:
+            type: object
+            required: [category, code]
+            properties:
+              category:
+                type: string
+                enum: [ERROR, WARNING]
+              code:
+                type: string
+              path:
+                type: string
+              text:
+                type: string
+
+  responses:
+    BadRequest:
+      description: Bad request — validation error in request body or parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Unauthorized — missing or invalid OAuth2 token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Forbidden — valid token but insufficient scope or consent
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Not found — resource does not exist
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UnprocessableEntity:
+      description: Unprocessable entity — business rule violation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

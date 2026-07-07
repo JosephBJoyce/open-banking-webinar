@@ -1,0 +1,93 @@
+name: 2 · Functional Tests (Swagger Functional Testing)
+
+on:
+  push:
+    branches:
+      - main
+      - '**'
+    paths:
+      - 'openapi/**'
+      - '.github/workflows/2-functional-tests.yml'
+  schedule:
+    # Run against sandbox nightly to catch regressions
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      suite_id:
+        description: 'Test suite ID to run (leave blank for all suites)'
+        required: false
+        type: string
+      environment:
+        description: 'Target environment'
+        required: true
+        default: sandbox
+        type: choice
+        options:
+          - sandbox
+          - staging
+          - production
+
+# Runs Swagger Functional Testing (Reflect) test suites via the CLI.
+# Suite IDs are stored as repository variables so they can be managed
+# without touching workflow code.
+# Docs: https://support.smartbear.com/swagger/functional-testing/docs/en/automation/continuous-integration--ci-cd-.html
+
+jobs:
+  functional-tests:
+    name: Run Reflect test suites
+    runs-on: ubuntu-latest
+
+    env:
+      REFLECT_API_KEY: ${{ secrets.REFLECT_API_KEY }}
+      TARGET_ENVIRONMENT: ${{ inputs.environment || 'sandbox' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Swagger Functional Testing CLI
+        run: npm install -g @smartbear/swagger-functional-testing-cli
+
+      - name: Run AIS test suite (accounts & transactions)
+        env:
+          SUITE_ID: ${{ vars.REFLECT_SUITE_AIS }}
+        run: |
+          swagger-functional-testing run \
+            --api-key "$REFLECT_API_KEY" \
+            --suite "$SUITE_ID" \
+            --environment "$TARGET_ENVIRONMENT" \
+            --reporter junit \
+            --output test-results/ais-results.xml
+
+      - name: Run PIS test suite (payment initiation)
+        env:
+          SUITE_ID: ${{ vars.REFLECT_SUITE_PIS }}
+        run: |
+          swagger-functional-testing run \
+            --api-key "$REFLECT_API_KEY" \
+            --suite "$SUITE_ID" \
+            --environment "$TARGET_ENVIRONMENT" \
+            --reporter junit \
+            --output test-results/pis-results.xml
+
+      - name: Run Consent Management test suite
+        env:
+          SUITE_ID: ${{ vars.REFLECT_SUITE_CONSENTS }}
+        run: |
+          swagger-functional-testing run \
+            --api-key "$REFLECT_API_KEY" \
+            --suite "$SUITE_ID" \
+            --environment "$TARGET_ENVIRONMENT" \
+            --reporter junit \
+            --output test-results/consents-results.xml
+
+      - name: Publish test results
+        uses: mikepenz/action-junit-report@v4
+        if: always()
+        with:
+          report_paths: 'test-results/*.xml'
+          check_name: 'Reflect — Functional Test Results'
+          fail_on_failure: true
