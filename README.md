@@ -18,7 +18,7 @@ This repository is the live demo for the webinar. It shows how Swagger helps Eur
 | Learning objective | Tool / capability shown |
 |---|---|
 | Enforce PSD2 API guidelines from the first line of design | Swagger Studio AI-generation + governance ruleset |
-| Automate regression coverage from design to deployment | Swagger Functional Testing (Reflect) in CI |
+| Automate regression coverage from design to deployment | Swagger Functional Testing in CI |
 | Detect and prevent spec drift by verifying your live API against its OpenAPI document | Bi-Directional Contract Testing (BDCT) via PactFlow |
 | Bring your entire API catalogue into AI-native developer tooling | SmartBear MCP Server — standardization gate + portal publishing |
 
