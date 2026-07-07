@@ -52,7 +52,7 @@ This repository is the live demo for the webinar. It shows how Swagger helps Eur
                                    ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  3. FUNCTIONAL TESTS  (workflow 2)                                      │
-│     Swagger Functional Testing (Reflect) suites run against sandbox     │
+│     Swagger Functional Testing suites run against sandbox     │
 │     Covers: AIS (accounts + transactions), PIS (payments), Consents     │
 │     → Regression failures block the deployment pipeline                 │
 └──────────────────────────────────┬──────────────────────────────────────┘
